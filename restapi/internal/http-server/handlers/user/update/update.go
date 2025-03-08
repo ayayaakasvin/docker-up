@@ -4,84 +4,76 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-
 	"restapi/internal/errorset"
+	helper "restapi/internal/lib/helperfunctions"
 	"restapi/internal/lib/password"
 	"restapi/internal/lib/sl"
-	"restapi/internal/models/status"
+	"restapi/internal/models/data"
+	"restapi/internal/models/response"
 
 	"github.com/gin-gonic/gin"
 )
 
 type Request struct {
-	ID 			int64 	`json:"id" binding:"required,gt=0"`
-	Password	string	`json:"password" binding:"required,min=8"`
-}
-
-type Response struct {
-	Status status.Status 	`json:"status"`
-	UserID int64 			`json:"user_id,omitempty"`
+	Password string `json:"password" binding:"required,min=8"`
 }
 
 type UserUpdater interface {
-	UpdateUserPassword(id int64, password string) (error)
+	UpdateUserPassword(userId int64, password string) error
 }
 
-func UpdateUserPasswordHandler (log *slog.Logger, uu UserUpdater) gin.HandlerFunc {
+func UpdateUserPasswordHandler(log *slog.Logger, uu UserUpdater) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// load logger with necessary data
 		const op = "handlers.user.update.UpdateUserHandler"
-		requestID, exists := c.Get("request_id")
-        if !exists {
-            requestID = "unknown"
-        }
+		helper.LoadLogger(&log, c, op)
 
-        log = log.With(
-            slog.String("op", op),
-            slog.String("request_id", requestID.(string)),
-        )
+		// fetch ID param
+		userId := helper.GetIDFromParams(c, helper.UserIDKey)
+		if userId == -1 {
+			response.Error(c, http.StatusBadRequest, errorset.ErrBindRequest)
+			return
+		}
 
+		// bind request
 		var req Request
-		// Reads the body of the request and binds it to the Request struct
 		if err := c.ShouldBindJSON(&req); err != nil {
-			log.Error("failed to bind request", sl.Err(err))
-			responseError(c, http.StatusBadRequest, "failed to bind request")
+			log.Error(errorset.ErrBindRequest, sl.Err(err))
+			response.Error(c, http.StatusBadRequest, errorset.ErrBindRequest)
 			return
 		}
 
-		log.Info("decoded request", slog.Any("req", req))
+		log.Info("decoded request", slog.Any(helper.ReqKey, req))
 
+		// password validation
 		if !password.IsValidPassword(req.Password) {
-			log.Error("Invalid password")
-			responseError(c, http.StatusBadRequest, "invalid password")
+			log.Error(errorset.ErrInvalidPassword.Error())
+			response.Error(c, http.StatusBadRequest, errorset.ErrInvalidPassword.Error())
 			return
 		}
 
-		err := uu.UpdateUserPassword(req.ID, req.Password)
+		// action with db
+		err := uu.UpdateUserPassword(userId, req.Password)
 		if err != nil {
-			if errors.Is(err, errorset.ErrUserNotFound) {
-				log.Error("user not found", sl.Err(err))
-				responseError(c, http.StatusNotFound, "user not found")
-				return
-			}
-			
-			log.Error("failed to update user password", sl.Err(err))
-			responseError(c, http.StatusInternalServerError, "failed to update user password")
+			handleUpdatingUserError(c, log, err)
 			return
 		}
 
-		responseOk(c, req.ID)
+		var data data.Data = data.NewData()
+		data[helper.UserIDKey] = userId
+
+		response.Ok(c, http.StatusOK, data)
 	}
 }
 
-func responseOk(c *gin.Context, id int64) {
-	c.JSON(http.StatusOK, Response{
-		Status: status.OK(),
-		UserID: id,
-	})
-}
+func handleUpdatingUserError(c *gin.Context, log *slog.Logger, err error) {
+	if errors.Is(err, errorset.ErrUserNotFound) {
+		log.Error(errorset.ErrUserNotFound.Error(), sl.Err(err))
+		response.Error(c, http.StatusNotFound, errorset.ErrUserNotFound.Error())
+		return
+	}
 
-func responseError(c *gin.Context, code int, errormsg string) {
-	c.JSON(code, Response{
-		Status: status.Error(errormsg),
-	})
+	log.Error("failed to update user password", sl.Err(err))
+	response.Error(c, http.StatusInternalServerError, "failed to update user password")
+	return
 }

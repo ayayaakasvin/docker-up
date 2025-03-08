@@ -6,16 +6,18 @@ import (
 	"os"
 
 	"restapi/internal/config"
+	taskDeleter "restapi/internal/http-server/handlers/task/delete"
+	taskGetter "restapi/internal/http-server/handlers/task/get/taskid"
+	tasksGetter "restapi/internal/http-server/handlers/task/get/userid"
+	taskSaver "restapi/internal/http-server/handlers/task/save"
+	taskUpdater "restapi/internal/http-server/handlers/task/update"
 	userDeleter "restapi/internal/http-server/handlers/user/delete"
 	userGetter "restapi/internal/http-server/handlers/user/get"
 	userSaver "restapi/internal/http-server/handlers/user/save"
 	userUpdater "restapi/internal/http-server/handlers/user/update"
-	taskSaver "restapi/internal/http-server/handlers/task/save"
-	taskGetter "restapi/internal/http-server/handlers/task/get"
-	taskUpdater "restapi/internal/http-server/handlers/task/update"
-	taskDeleter "restapi/internal/http-server/handlers/task/delete"
-	logger "restapi/internal/http-server/middleware"
-	"restapi/internal/lib/logger/handlers/prettyslog"
+	"restapi/internal/http-server/middleware"
+	logger "restapi/internal/http-server/middleware/logger"
+	slogpretty "restapi/internal/lib/logger/handlers/prettyslog"
 	"restapi/internal/lib/sl"
 	"restapi/internal/storage"
 
@@ -46,30 +48,33 @@ func main() {
 
 	router := gin.Default()
 
-	router.Use(requestid.New())
-	router.Use(gin.Logger())
-	router.Use(logger.New(log))
-	router.Use(gin.Recovery())
-	router.Use(logger.URLFormat())
+	middleware.MiddlewareAdd(router, requestid.New(), gin.Logger(), logger.New(log), gin.Recovery(), logger.URLFormat(), middleware.CorsDefault)
 
-	router.POST("/user",userSaver.SaveUserHandler(log, db))
-	router.GET("/user", userGetter.GetUserHandler(log, db))
-	router.PATCH("/user", userUpdater.UpdateUserPasswordHandler(log, db))
-	router.DELETE("/user", userDeleter.DeleteUserHandler(log, db))
-	
-	router.POST("/task", taskSaver.SaveTaskHandler(log, db))
-	router.GET("/task", taskGetter.GetTasksHandler(log, db))
-	router.PATCH("/task", taskUpdater.UpdateTaskHandler(log, db))
-	router.DELETE("/task", taskDeleter.DeleteTaskHandler(log, db))
+	userRouter := router.Group("/user")
+	{
+		userRouter.POST("/", userSaver.SaveUserHandler(log, db))
+		userRouter.GET("/:userId", userGetter.GetUserHandler(log, db))
+		userRouter.PUT("/:userId/password", userUpdater.UpdateUserPasswordHandler(log, db))
+		userRouter.DELETE("/:userId", userDeleter.DeleteUserHandler(log, db))
+	}
+
+	taskRouter := router.Group("/task")
+	{
+		taskRouter.POST("/:userId", taskSaver.SaveTaskHandler(log, db))
+		taskRouter.GET("/user/:userId", tasksGetter.GetUserTasksHandler(log, db))
+		taskRouter.GET("/:taskId", taskGetter.GetTaskHandler(log, db))
+		taskRouter.PUT("/:taskId", taskUpdater.UpdateTaskHandler(log, db))
+		taskRouter.DELETE("/:taskId", taskDeleter.DeleteTaskHandler(log, db))
+	}
 
 	log.Info("starting HTTP server", slog.String("port", cfg.HTTPServer.Address))
-	
+
 	server := &http.Server{
-		Addr:    cfg.HTTPServer.Address,
-		Handler: router,
-		ReadTimeout: cfg.HTTPServer.Timeout,
+		Addr:         cfg.HTTPServer.Address,
+		Handler:      router,
+		ReadTimeout:  cfg.HTTPServer.Timeout,
 		WriteTimeout: cfg.HTTPServer.Timeout,
-		IdleTimeout: cfg.HTTPServer.Timeout,
+		IdleTimeout:  cfg.HTTPServer.Timeout,
 	}
 
 	if err := server.ListenAndServe(); err != nil {

@@ -12,5 +12,7 @@ var (
 	ErrDuplicateUser       							= errors.New("duplicate user")
 	ErrInvalidCredentials  							= errors.New("invalid credentials")
 	ErrInvalidPassword								= errors.New("invalid password")
+	ErrValidation									= errors.New("error while validation")
 	ErrForeignKeyConstraintViolation pq.ErrorCode 	= "23503"
+	ErrBindRequest    								= "failed to bind request"
 )

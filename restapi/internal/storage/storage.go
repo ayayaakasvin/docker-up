@@ -9,14 +9,13 @@ import (
 	"restapi/internal/errorset"
 	"restapi/internal/lib/hashtool"
 	"restapi/internal/models"
-	migrationTool "restapi/internal/storage/migrationTool"
 
 	"github.com/lib/pq"
 )
 
 // PostgresStorage implements the Storage interface for PostgreSQL
 type PostgresStorage struct {
-	db *sql.DB
+	db     *sql.DB
 	config *config.Config
 }
 
@@ -40,12 +39,6 @@ func NewPostgresStorage(cfg *config.Config) (*PostgresStorage, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	// Run migration tool
-	if err := migrationTool.ExecuteMigrationTool(
-		db, cfg.MigrationPath, migrationTool.UpMigration); err != nil {
-		return nil, fmt.Errorf("failed to run migration tool: %w", err)
-	}
-
 	return &PostgresStorage{db: db, config: cfg}, nil
 }
 
@@ -56,7 +49,7 @@ func (ps *PostgresStorage) SaveUser(username, password string) (int64, error) {
 		return 0, fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	stmt, err := ps.db.Prepare("INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id")
+	stmt, err := ps.db.Prepare("INSERT INTO users (username, password) VALUES ($1, $2) RETURNING user_id")
 	if err != nil {
 		return 0, fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -65,18 +58,18 @@ func (ps *PostgresStorage) SaveUser(username, password string) (int64, error) {
 	var userID int64
 	err = stmt.QueryRow(username, hashedPassword).Scan(&userID)
 	if err != nil {
-        if pgErr, ok := err.(*pq.Error); ok && pgErr.Code == "23505" {
-            return 0, fmt.Errorf("username already exists")
-        }
-        return 0, fmt.Errorf("failed to execute statement: %w", err)
-    }
+		if pgErr, ok := err.(*pq.Error); ok && pgErr.Code == "23505" {
+			return 0, fmt.Errorf("username already exists")
+		}
+		return 0, fmt.Errorf("failed to execute statement: %w", err)
+	}
 
 	return userID, nil
 }
 
 // GetUserByID retrieves a record from the PostgreSQL database by key
 func (ps *PostgresStorage) GetUserByID(id int64) (*models.User, error) {
-	stmt, err := ps.db.Prepare("SELECT id, username, password, created_at FROM users WHERE id = $1")
+	stmt, err := ps.db.Prepare("SELECT user_id, username, password, created_at FROM users WHERE user_id = $1")
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -115,7 +108,7 @@ func (ps *PostgresStorage) UsernameExists(name string) (bool, error) {
 
 // UpdateUser updates a record in the PostgreSQL database
 func (ps *PostgresStorage) UpdateUserPassword(id int64, password string) error {
-	stmt, err := ps.db.Prepare("UPDATE users SET password = $1 WHERE id = $2")
+	stmt, err := ps.db.Prepare("UPDATE users SET password = $1 WHERE user_id = $2")
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -145,7 +138,7 @@ func (ps *PostgresStorage) UpdateUserPassword(id int64, password string) error {
 
 // DeleteUser deletes a record from the PostgreSQL database
 func (ps *PostgresStorage) DeleteUser(id int64) error {
-	stmt, err := ps.db.Prepare("DELETE FROM users WHERE id = $1")
+	stmt, err := ps.db.Prepare("DELETE FROM users WHERE user_id = $1")
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -167,7 +160,7 @@ func (ps *PostgresStorage) DeleteUser(id int64) error {
 
 // SaveTask inserts a new task record into the PostgreSQL database
 func (ps *PostgresStorage) SaveTask(userId int64, content string) (int64, error) {
-	stmt, err := ps.db.Prepare("INSERT INTO tasks (user_id, task_content) VALUES ($1, $2) RETURNING id")
+	stmt, err := ps.db.Prepare("INSERT INTO tasks (user_id, task_content) VALUES ($1, $2) RETURNING task_id")
 	if err != nil {
 		return 0, fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -196,7 +189,7 @@ func (ps *PostgresStorage) GetTasksByUserID(userID int64) ([]*models.Task, error
 		return nil, err
 	}
 
-	stmt, err := ps.db.Prepare("SELECT id, user_id, task_content, created_at FROM tasks WHERE user_id = $1")
+	stmt, err := ps.db.Prepare("SELECT task_id, user_id, task_content, created_at FROM tasks WHERE user_id = $1")
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -210,7 +203,7 @@ func (ps *PostgresStorage) GetTasksByUserID(userID int64) ([]*models.Task, error
 	var tasks []*models.Task
 	for rows.Next() {
 		var task models.Task
-		err = rows.Scan(&task.ID, &task.UserID, &task.TaskContent, &task.CreatedAt)
+		err = rows.Scan(&task.TaskID, &task.UserID, &task.TaskContent, &task.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
@@ -221,9 +214,29 @@ func (ps *PostgresStorage) GetTasksByUserID(userID int64) ([]*models.Task, error
 	return tasks, nil
 }
 
+// GetTaskByTaskID retrieves a record from the PostgreSQL database by key
+func (ps *PostgresStorage) GetTaskByTaskID(taskID int64) (*models.Task, error) {
+	stmt, err := ps.db.Prepare("SELECT task_id, user_id, task_content, created_at FROM tasks WHERE task_id = $1")
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	var task models.Task
+	err = stmt.QueryRow(taskID).Scan(&task.TaskID, &task.UserID, &task.TaskContent, &task.CreatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, errorset.ErrTaskNotFound
+		}
+		return nil, fmt.Errorf("failed to execute statement: %w", err)
+	}
+
+	return &task, nil
+}
+
 // UpdateTask updates a record in the PostgreSQL database
 func (ps *PostgresStorage) UpdateTaskContent(task_id int64, content string) error {
-	stmt, err := ps.db.Prepare("UPDATE tasks SET task_content = $1 WHERE id = $2")
+	stmt, err := ps.db.Prepare("UPDATE tasks SET task_content = $1 WHERE task_id = $2")
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -238,7 +251,7 @@ func (ps *PostgresStorage) UpdateTaskContent(task_id int64, content string) erro
 
 // DeleteTask deletes a record from the PostgreSQL database
 func (ps *PostgresStorage) DeleteTask(task_id int64) error {
-	stmt, err := ps.db.Prepare("DELETE FROM tasks WHERE id = $1")
+	stmt, err := ps.db.Prepare("DELETE FROM tasks WHERE task_id = $1")
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -260,14 +273,4 @@ func (ps *PostgresStorage) Ping() error {
 // Close closes the connection to the PostgreSQL database
 func (ps *PostgresStorage) Close() error {
 	return ps.db.Close()
-}
-
-// Reset clears all records from the PostgreSQL database
-func (ps *PostgresStorage) Reset() error {
-	err := migrationTool.ExecuteMigrationTool(ps.db, ps.config.MigrationPath, migrationTool.ResetMigration)
-	if err != nil {
-		return fmt.Errorf("failed to reset database: %w", err)
-	}
-
-	return nil
 }

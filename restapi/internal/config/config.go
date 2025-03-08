@@ -20,7 +20,7 @@ type Config struct {
 }
 
 type StorageConfig struct {
-	Host 			string 			`yaml:"host" 			env-default:"localhost"		`
+	Host 			string 			`yaml:"host" 			env-default:"localhost"	`
 	Port 			string 			`yaml:"port" 			env-default:"5432" 		`
 	DatabaseName 	string 			`yaml:"databaseName" 	env-default:"postgres" 	`
 	User 			string 			`yaml:"user" 			env-default:"postgres" 	`

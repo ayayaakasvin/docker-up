@@ -11,5 +11,3 @@ http_server:
   address: "0.0.0.0:8069"
   timeout: 5s
   iddle_timeout: 60s
-
-migrationPath: "/app/restapi/migration" # Path to migration files in Unix systems

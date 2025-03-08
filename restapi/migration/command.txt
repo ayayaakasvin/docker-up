@@ -1,0 +1,2 @@
+gomig -host="localhost" -port=5432 -user="todo_manager" -password="1488" -dbname="todo" -down -path="./migration"
+gomig -host="localhost" -port=5432 -user="todo_manager" -password="1488" -dbname="todo" -up -path="./migration"

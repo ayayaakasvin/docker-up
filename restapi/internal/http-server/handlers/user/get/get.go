@@ -6,75 +6,53 @@ import (
 	"net/http"
 
 	"restapi/internal/errorset"
+	helper "restapi/internal/lib/helperfunctions"
 	"restapi/internal/lib/sl"
 	"restapi/internal/models"
-	"restapi/internal/models/status"
+	"restapi/internal/models/data"
+	"restapi/internal/models/response"
 
 	"github.com/gin-gonic/gin"
 )
 
-type Request struct {
-	ID int64 `json:"id" binding:"required,gt=0"`
-}
-
-type Response struct {
-	Status status.Status `json:"status"`
-	User   *models.User  `json:"user,omitempty"`
-}
-
 type UserGetter interface {
-	GetUserByID(id int64) (*models.User, error) 
+	GetUserByID(userId int64) (*models.User, error)
 }
 
-func GetUserHandler (log *slog.Logger, ug UserGetter) gin.HandlerFunc {
+func GetUserHandler(log *slog.Logger, ug UserGetter) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		const op = "handlers.user.get.GetUserHandler"
-		requestID, exists := c.Get("request_id")
-        if !exists {
-            requestID = "unknown"
-        }
+		helper.LoadLogger(&log, c, op)
 
-        log = log.With(
-            slog.String("op", op),
-            slog.String("request_id", requestID.(string)),
-        )
-
-		var req Request
-		// Reads the body of the request and binds it to the Request struct
-		if err := c.ShouldBindJSON(&req); err != nil {
-			log.Error("failed to bind request", sl.Err(err))
-			responseError(c, http.StatusBadRequest, "failed to bind request")
+		userId := helper.GetIDFromParams(c, helper.UserIDKey)
+		if userId == -1 {
+			response.Error(c, http.StatusBadRequest, errorset.ErrBindRequest)
 			return
 		}
 
-		log.Info("decoded request", slog.Any("req", req))
+		log.Info("decoded request", slog.Any(helper.UserIDKey, userId))
 
-		userObject, err := ug.GetUserByID(req.ID)
+		userObject, err := ug.GetUserByID(int64(userId))
 		if err != nil {
-			if errors.Is(err, errorset.ErrUserNotFound) {
-				log.Error(err.Error(), sl.Err(err))
-				responseError(c, http.StatusNotFound, err.Error())
-				return
-			}
-			
-			log.Error("failed to get user", sl.Err(err))
-			responseError(c, http.StatusInternalServerError, "failed to get user")
+			handleGettingUserError(c, log, err)
 			return
 		}
 
-		responseOk(c, userObject)
+		var data data.Data = data.NewData()
+		data[helper.UserKey] = userObject
+
+		response.Ok(c, http.StatusOK, data)
 	}
 }
 
-func responseOk(c *gin.Context, userObj *models.User) {
-	c.JSON(http.StatusOK, Response{
-		Status: status.OK(),
-		User: userObj,
-	})
-}
+func handleGettingUserError(c *gin.Context, log *slog.Logger, err error)  {
+	if errors.Is(err, errorset.ErrUserNotFound) {
+		log.Error(err.Error(), sl.Err(err))
+		response.Error(c, http.StatusNotFound, err.Error())
+		return
+	}
 
-func responseError(c *gin.Context, code int, errormsg string) {
-	c.JSON(code, Response{
-		Status: status.Error(errormsg),
-	})
+	log.Error("failed to get user", sl.Err(err))
+	response.Error(c, http.StatusInternalServerError, "failed to get user")
+	return
 }

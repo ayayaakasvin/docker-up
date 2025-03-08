@@ -5,6 +5,7 @@ go 1.23.4
 require github.com/lib/pq v1.10.9
 
 require (
+	github.com/gin-contrib/cors v1.7.3 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 )

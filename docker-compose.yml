@@ -9,19 +9,45 @@ services:
       - "5433:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
+    networks:
+      - todo-net
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "todo_manager", "-d", "todo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  gomig:
+    image: go-mig-test:latest
+    volumes:
+      - ./restapi/migration:/app/migration
+    command: [
+      "-host=db",
+      "-port=5432",
+      "-user=todo_manager",
+      "-password=1488",
+      "-dbname=todo",
+      "-up",
+      "-path=/app/migration"
+    ]
+    networks:
+      - todo-net
+    depends_on:
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U todo_manager -d todo"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  back:
-    build: .
+  backend:
+    build: ./restapi
     depends_on:
       db:
         condition: service_healthy
     environment:
-      CONFIG_PATH: /app/restapi/config/config.yaml
+      CONFIG_PATH: /app/config/config.yaml
       DB_HOST: db
       DB_PORT: 5432
       DB_USER: todo_manager
@@ -29,6 +55,10 @@ services:
       DB_NAME: todo
     ports:
       - "8069:8069"
-      
+    networks:
+      - todo-net
+    
 volumes:
   db-data:
+networks:
+  todo-net:

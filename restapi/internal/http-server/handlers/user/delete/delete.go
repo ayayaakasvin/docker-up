@@ -6,72 +6,56 @@ import (
 	"net/http"
 
 	"restapi/internal/errorset"
+	helper "restapi/internal/lib/helperfunctions"
 	"restapi/internal/lib/sl"
-	"restapi/internal/models/status"
+	"restapi/internal/models/response"
+	"restapi/internal/models/state"
 
 	"github.com/gin-gonic/gin"
 )
 
-type Request struct {
-	ID 			int64 	`json:"id" binding:"required,gt=0"`
-}
-
 type Response struct {
-	Status status.Status 	`json:"status"`
+	State state.State `json:"state"`
 }
 
 type UserDeleter interface {
-	DeleteUser(id int64) (error)
+	DeleteUser(userId int64) error
 }
 
-func DeleteUserHandler (log *slog.Logger, ud UserDeleter) gin.HandlerFunc {
+func DeleteUserHandler(log *slog.Logger, ud UserDeleter) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// load logger with necessary data
 		const op = "handlers.user.delete.DeleteUserHandler"
-		requestID, exists := c.Get("request_id")
-        if !exists {
-            requestID = "unknown"
-        }
+		helper.LoadLogger(&log, c, op)
 
-        log = log.With(
-            slog.String("op", op),
-            slog.String("request_id", requestID.(string)),
-        )
-
-		var req Request
-		// Reads the body of the request and binds it to the Request struct
-		if err := c.ShouldBindJSON(&req); err != nil {
-			log.Error("failed to bind request", sl.Err(err))
-			responseError(c, http.StatusBadRequest, "failed to bind request")
+		// fetch ID param
+		userId := helper.GetIDFromParams(c, helper.UserIDKey)
+		if userId == -1 {
+			response.Error(c, http.StatusBadRequest, errorset.ErrBindRequest)
 			return
 		}
 
-		log.Info("decoded request", slog.Any("req", req))
+		log.Info("decoded request", slog.Any(helper.UserIDKey, userId))
 
-		err := ud.DeleteUser(req.ID)
+		// action with db
+		err := ud.DeleteUser(userId)
 		if err != nil {
-			if errors.Is(err, errorset.ErrUserNotFound) {
-				log.Error("user not found", sl.Err(err))
-				responseError(c, http.StatusNotFound, "user not found")
-				return
-			}
-			
-			log.Error("failed to delete user", sl.Err(err))
-			responseError(c, http.StatusInternalServerError, "failed to delete user")
+			handleDeletingUserError(c, log, err)
 			return
 		}
 
-		responseOk(c)
+		response.Ok(c, http.StatusOK, nil)
 	}
 }
 
-func responseOk(c *gin.Context) {
-	c.JSON(http.StatusOK, Response{
-		Status: status.OK(),
-	})
-}
+func handleDeletingUserError(c *gin.Context, log *slog.Logger, err error)  {
+	if errors.Is(err, errorset.ErrUserNotFound) {
+		log.Error(errorset.ErrUserNotFound.Error(), sl.Err(err))
+		response.Error(c, http.StatusNotFound, errorset.ErrUserNotFound.Error())
+		return
+	}
 
-func responseError(c *gin.Context, code int, errormsg string) {
-	c.JSON(code, Response{
-		Status: status.Error(errormsg),
-	})
+	log.Error("failed to delete user", sl.Err(err))
+	response.Error(c, http.StatusInternalServerError, "failed to delete user")
+	return
 }
