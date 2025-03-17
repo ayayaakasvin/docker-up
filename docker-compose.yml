@@ -57,6 +57,24 @@ services:
       - "8069:8069"
     networks:
       - todo-net
+
+  auth:
+    build: ./auth
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      CONFIG_PATH: /app/config/config.yaml
+      JWT_SECRET_KEY: AMOGUS
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: todo_manager
+      DB_PASSWORD: 1488
+      DB_NAME: todo
+    ports:
+      - "8088:8088"
+    networks:
+      - todo-net
     
 volumes:
   db-data:

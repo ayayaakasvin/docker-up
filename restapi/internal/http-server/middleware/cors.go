@@ -7,7 +7,7 @@ import (
 
 // Used for serving localhost:4200
 var CorsDefault gin.HandlerFunc = cors.New(cors.Config{
-	AllowOrigins:     []string{"http://localhost:4200"},
+	AllowOrigins:     []string{"http://localhost:4200", "http://localhost:8090"},
 	AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 	AllowHeaders:     []string{"Content-Type", "Authorization"},
 	AllowCredentials: true,

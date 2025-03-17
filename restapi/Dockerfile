@@ -18,8 +18,6 @@ COPY --from=builder /app/backend .
 
 COPY --from=builder /app/config/config.yaml /app/config/config.yaml
 
-COPY --from=builder /app/migration /app/migration
-
 RUN chmod +x ./backend
 
 EXPOSE 8069
