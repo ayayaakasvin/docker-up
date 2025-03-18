@@ -17,6 +17,7 @@ type Config struct {
 	MigrationPath 	string 			`yaml:"migrationPath" 	env-required:"true"`
 	Database 		StorageConfig 	`yaml:"database" 										env-required:"true"`
 	HTTPServer 						`yaml:"http_server"										env-required:"true"`
+	ServiceAddresses				`yaml:"cors"			env-default:"localhost:8080"`
 }
 
 type StorageConfig struct {
@@ -31,6 +32,10 @@ type HTTPServer struct {
 	Address 		string 			`yaml:"address"			env-default:"localhost:8080`
 	Timeout 		time.Duration	`yaml:"timeout" 										env-required:"true"`
 	IddleTimeout	time.Duration	`yaml:"iddle_timeout" 									env-required:"true"`
+}
+
+type ServiceAddresses struct {
+	Addresses 		[]string		`yaml:"addresses"`
 }
 
 func MustLoadConfig () *Config {

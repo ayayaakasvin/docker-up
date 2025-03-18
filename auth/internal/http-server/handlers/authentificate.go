@@ -17,21 +17,21 @@ import (
 // Authentificate implements AppHandlers.
 func (a *AppHandler) Authentificate(c *gin.Context) {
 	const op = "auth.internal.http-server.handlers.AppHandler.Authentificate"
-	a.log = a.log.With(
+	logger := a.log.With(
 		slog.String("op", op),
 	)
 
 	var request Request
 	if err := c.BindJSON(&request); err != nil {
-		a.log.Error(errorset.ErrBindRequest.Error(), sl.Err(err))
+		logger.Error(errorset.ErrBindRequest.Error(), sl.Err(err))
 		response.Error(c, http.StatusBadRequest, errorset.ErrBindRequest.Error())
 		return
 	}
 
-	a.log.Info("decoded request", sl.Any("req", request))
+	logger.Info("decoded request", sl.Any("req", request))
 
-	if err := validateAuthRequest(c, a.log, request, a.db); err != nil {
-		a.log.Error(op, sl.Err(err))
+	if err := validateAuthRequest(c, logger, request, a.db); err != nil {
+		logger.Error(op, sl.Err(err))
 		return
 	}
 }

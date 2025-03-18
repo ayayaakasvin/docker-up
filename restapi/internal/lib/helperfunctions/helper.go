@@ -34,14 +34,16 @@ func GetIDFromParams(c *gin.Context, idkey string) int64 {
 	return taskID
 }
 
-func LoadLogger(log **slog.Logger, c *gin.Context, operation string)  {
-	requestID, exists := c.Get("RequestID")
+func LoadLogger(log *slog.Logger, c *gin.Context, operation string) *slog.Logger  {
+	requestID, exists := c.Get("X-Request-ID")
 	if !exists {
 		requestID = "unknown"
 	}
 
-	*log = (*log).With(
+	newLogger := log.With(
 		slog.String("op", operation),
-		slog.String("request_id", requestID.(string)),
+		slog.String("X-Request-ID", requestID.(string)),
 	)
+
+	return newLogger
 }

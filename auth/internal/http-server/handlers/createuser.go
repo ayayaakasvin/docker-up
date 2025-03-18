@@ -15,19 +15,19 @@ import (
 // CreateUser implements AppHandlers.
 func (a *AppHandler) CreateUser(c *gin.Context) {
 	const op = "auth.internal.http-server.handlers.AppHandler.CreateUser"
-	a.log = a.log.With(
+	logger := a.log.With(
 		slog.String("op", op),
 	)
 
 	var request Request
 	if err := c.BindJSON(&request); err != nil {
-		a.log.Error(errorset.ErrBindRequest.Error(), sl.Err(err))
+		logger.Error(errorset.ErrBindRequest.Error(), sl.Err(err))
 		response.Error(c, http.StatusBadRequest, errorset.ErrBindRequest.Error())
 		return
 	}
 
-	if err := validateSignInRequest(c, a.log, request); err != nil {
-		a.log.Error(op, sl.Err(err))
+	if err := validateSignInRequest(c, logger, request); err != nil {
+		logger.Error(op, sl.Err(err))
 		return
 	}
 }
