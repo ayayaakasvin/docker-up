@@ -20,7 +20,7 @@ services:
   gomig:
     image: ayayaakasvin/gomig:latest
     volumes:
-      - ./restapi/migration:/app/migration
+      - ./migration:/app/migration
     command: [
       "-host=db",
       "-port=5432",
@@ -42,12 +42,14 @@ services:
       retries: 5
 
   backend:
-    build: ./restapi
+    image: ayayaakasvin/todo-api:latest
     depends_on:
       db:
         condition: service_healthy
     environment:
       CONFIG_PATH: /app/config/config.yaml
+      JWT_SECRET_KEY: AMOGUS
+      GIN_MODE: release
       DB_HOST: db
       DB_PORT: 5432
       DB_USER: todo_manager
@@ -59,13 +61,14 @@ services:
       - todo-net
 
   auth:
-    build: ./auth
+    image: ayayaakasvin/auth-service:latest
     depends_on:
       db:
         condition: service_healthy
     environment:
       CONFIG_PATH: /app/config/config.yaml
       JWT_SECRET_KEY: AMOGUS
+      GIN_MODE: release
       DB_HOST: db
       DB_PORT: 5432
       DB_USER: todo_manager
